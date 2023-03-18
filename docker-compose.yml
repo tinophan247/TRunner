@@ -1,0 +1,129 @@
+version: '3.9'
+
+services:
+  api:
+    build:
+      context: ./TRunner-API
+      dockerfile: Dockerfile
+      target: api
+      args:
+        - DEPLOYMENT_ENV=${DEPLOYMENT_ENV}
+        - MYSQL_USER=${MYSQL_USER}
+        - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+        - MYSQL_DATABASE=${MYSQL_DATABASE}
+        - MINIO_API_DOMAIN=${MINIO_API_DOMAIN}
+        - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+        - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    container_name: runner-api-${DEPLOYMENT_ENV}
+    hostname: runner-api-${DEPLOYMENT_ENV}
+    depends_on:
+      - database
+    restart: always
+    networks:
+      - t-runner
+    profiles: ["dev", "prod"]
+
+  web:
+    build:
+      context: ./TRunner-UI
+      dockerfile: Dockerfile
+    container_name: runner-web-${DEPLOYMENT_ENV}
+    hostname: runner-web-${DEPLOYMENT_ENV}
+    restart: always
+    environment:
+      - REACT_APP_TRUNNER_API_URL=http://runner-api-${DEPLOYMENT_ENV}/
+    networks:
+      - t-runner
+    profiles: ["dev", "prod"]
+
+  migrate:
+    build:
+      context: ./TRunner-API
+      dockerfile: Dockerfile
+      target: migrate
+      args:
+        - DEPLOYMENT_ENV=${DEPLOYMENT_ENV}
+        - MYSQL_USER=${MYSQL_USER}
+        - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+        - MYSQL_DATABASE=${MYSQL_DATABASE}
+    container_name: runner-migrate-${DEPLOYMENT_ENV}
+    command: "dotnet ef database update"
+    depends_on:
+      - database
+    networks:
+      - t-runner
+    profiles: ["migrate"]
+
+  database:
+    image: mysql
+    container_name: runner-database-${DEPLOYMENT_ENV}
+    hostname: runner-database-${DEPLOYMENT_ENV}
+    volumes:
+      - ${DATA_PATH_HOST}/mysql:/var/lib/mysql
+      - ${DATA_PATH_HOST}/log/mysql:/var/log/mysql
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - TZ=${TIMEZONE}
+    networks:
+      - t-runner
+    profiles: ["dev", "prod", "migrate"]
+
+  pma:
+    image: phpmyadmin
+    container_name: runner-pma-${DEPLOYMENT_ENV}
+    hostname: runner-pma-${DEPLOYMENT_ENV}
+    depends_on:
+      - database
+    restart: always
+    environment:
+      - PMA_HOST=runner-database-${DEPLOYMENT_ENV}
+      - PMA_PORT=3306
+    networks:
+      - t-runner
+    profiles: ["dev", "prod"]
+
+  minio:
+    image: minio/minio:RELEASE.2021-10-02T16-31-05Z
+    container_name: runner-minio-${DEPLOYMENT_ENV}
+    hostname: runner-minio-${DEPLOYMENT_ENV}
+    restart: always
+    command: server --console-address :9001 /data
+    volumes:
+      - ${DATA_PATH_HOST}/minio:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      VIRTUAL_PORT: 9001
+    networks:
+      - t-runner
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+    profiles: ["dev", "prod"]
+
+  db_backup:
+    build:
+      context: ./db_backup
+      dockerfile: Dockerfile
+    container_name: runner-backup-${DEPLOYMENT_ENV}
+    hostname: runner-backup-${DEPLOYMENT_ENV}
+    volumes:
+      - ${DATA_PATH_HOST}/minio/database:/backup
+    environment:
+      - DEPLOYMENT_ENV=${DEPLOYMENT_ENV}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+    networks:
+      - t-runner
+    profiles: ["backup"]
+
+networks:
+  t-runner:
+    name: t-runner-${DEPLOYMENT_ENV}
+    external: true

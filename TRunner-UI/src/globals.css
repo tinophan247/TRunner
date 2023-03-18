@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import "../src/styles/fonts.css";
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.btn {
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-weight: 700;
+  color: '#333';
+  width: 100%;
+  border-radius: 4px;
+}

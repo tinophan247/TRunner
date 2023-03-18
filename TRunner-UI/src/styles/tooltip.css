@@ -1,0 +1,21 @@
+.tooltip {
+  @apply relative;
+};
+
+.tooltip .tooltiptext-help-icon {
+  @apply invisible absolute;
+  @apply font-barlow font-normal text-sm;
+  @apply rounded text-white;
+
+  width: 302px;
+  margin-left: 32px;
+  bottom: -140px;
+  opacity: 67%;
+  background: rgba(0, 0, 0, 0.67);
+  backdrop-filter: blur(8px);
+};
+
+.tooltip:hover .tooltiptext-help-icon {
+  @apply visible;
+  opacity: 1;
+};
